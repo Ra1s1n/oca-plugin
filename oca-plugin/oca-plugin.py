@@ -105,6 +105,7 @@ def create_layer(image, layers_json):
 
 def import_oca(input_path):
     with tempfile.TemporaryDirectory() as temp_dir:
+
         with open(input_path, "r") as file:
             data = json.load(file)
 
@@ -138,8 +139,23 @@ def import_oca(input_path):
                         height = layer_height
                     new_layer = Gimp.Layer.new(image, name, width, height, Gimp.ImageType.RGBA_IMAGE, opacity, Gimp.LayerMode.NORMAL)
 
-                    if (new_layer != None):
-                        image.insert_layer(new_layer, group, position)
+                    frame_filename = frame.get("fileName", '')
+                    if(frame_filename != ''):
+                        index = frame_filename.index('/')
+                        frame_filename = frame_filename[:index] + "\\" + frame_filename[index + 1:]
+
+                    frame_filepath = os.path.join(folder_path, frame_filename)
+
+                    if not os.path.exists(frame_filepath):
+                         print(f"Warning: frame image not found: {frame_filepath}")
+                         continue
+
+                    frame_file = Gio.file_new_for_path(frame_filepath)
+                    frame_layer = Gimp.file_load_layer(Gimp.RunMode.NONINTERACTIVE, image, frame_file)
+
+                    if(frame_layer != None):
+                        image.insert_layer(frame_layer, group, position)
+
 
         for layer_data in reversed(layers_json):
             layer_name = layer_data.get("name", "Layer")
