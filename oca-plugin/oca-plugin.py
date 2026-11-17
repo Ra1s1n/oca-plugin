@@ -91,23 +91,18 @@ def build_content_json(image, temp_dir):
         "layers": oca_layers
     }
 
-
 def import_oca(input_path):
     with tempfile.TemporaryDirectory() as temp_dir:
-        with zipfile.ZipFile(input_path, "r") as zf:
-            zf.extractall(temp_dir)
+        with open(input_path, "r") as file:
+            data = json.load(file)
 
-        content_json_path = os.path.join(temp_dir, "content.json")
-        if not os.path.exists(content_json_path):
-            raise RuntimeError("No content.json found in .oca file.")
+        folder_path = os.path.split(input_path)
+        folder_path = folder_path[0]
 
-        with open(content_json_path, "r") as f:
-            content = json.load(f)
-
-        width = content.get("width", 1920)
-        height = content.get("height", 1080)
-        name = content.get("name", "Imported OCA")
-        oca_layers = content.get("layers", [])
+        width = data.get("width", 1920)
+        height = data.get("height", 1080)
+        name = data.get("name", "Imported OCA")
+        oca_layers = data.get("layers", [])
 
         image = Gimp.Image.new(width, height, 0)
         # Note: image.set_name() not available in GIMP 3.2, name handled via filename
@@ -119,6 +114,7 @@ def import_oca(input_path):
             position = layer_data.get("position", [0, 0])
             frames = layer_data.get("frames", [])
 
+            print(layer_name)
             if not frames:
                 continue
 
@@ -164,8 +160,6 @@ def import_oca(input_path):
 
         print(f"Done! Imported {len(oca_layers)} layers from {input_path}")
         return image
-
-
 
 
 # Consolidated plugin below — OcaLoader and OcaSaver removed to avoid duplication
