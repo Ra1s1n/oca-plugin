@@ -91,6 +91,16 @@ def build_content_json(image, temp_dir):
         "layers": oca_layers
     }
 
+def create_layer(image, input_json):
+    for item in input_json:
+        group = Gimp.GroupLayer.new(image, item.get("name",'Imported Image'))
+        position = len (image.get_layers())
+        image.insert_layer(group, None, position)
+        if item.get("animated"):
+            print('yes')
+        else:
+            print('no')
+
 def import_oca(input_path):
     with tempfile.TemporaryDirectory() as temp_dir:
         with open(input_path, "r") as file:
@@ -106,6 +116,7 @@ def import_oca(input_path):
 
         image = Gimp.Image.new(width, height, 0)
         # Note: image.set_name() not available in GIMP 3.2, name handled via filename
+        create_layer_rec(image, oca_layers)
 
         for layer_data in reversed(oca_layers):
             layer_name = layer_data.get("name", "Layer")
