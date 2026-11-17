@@ -91,15 +91,17 @@ def build_content_json(image, temp_dir):
         "layers": oca_layers
     }
 
-def create_layer(image, input_json):
-    for item in input_json:
-        group = Gimp.GroupLayer.new(image, item.get("name",'Imported Image'))
+def create_layer(image, layers_json):
+    for layer in layers_json:
+        group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
         position = len (image.get_layers())
         image.insert_layer(group, None, position)
-        if item.get("animated"):
-            print('yes')
-        else:
-            print('no')
+        for frame in layer.get("frames", []):
+            name = frame.get("name", 'Imported Frame')
+            height = frame.get("height",layer.get("height"))
+            width = frame.get("width", layer.width)
+            opacity = frame.get("opacity", 100.0)
+            image.Layer.new(name, )
 
 def import_oca(input_path):
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -109,23 +111,43 @@ def import_oca(input_path):
         folder_path = os.path.split(input_path)
         folder_path = folder_path[0]
 
-        width = data.get("width", 1920)
-        height = data.get("height", 1080)
+        w = data.get("width", 1920)
+        h = data.get("height", 1080)
         name = data.get("name", "Imported OCA")
-        oca_layers = data.get("layers", [])
+        layers_json = data.get("layers", [])
 
-        image = Gimp.Image.new(width, height, 0)
+        image = Gimp.Image.new(w, h, 0)
         # Note: image.set_name() not available in GIMP 3.2, name handled via filename
-        create_layer_rec(image, oca_layers)
+        for layer in layers_json:
+            group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
+            position = len (image.get_layers())
+            image.insert_layer(group, None, position)
+            frames = layer.get("frames", [])
+            layer_height = layer.get("height", h)
+            layer_width = layer.get("width", w)
 
-        for layer_data in reversed(oca_layers):
+            if (frames != None):
+                for frame in frames:
+                    name = frame.get("name", 'Imported Frame')
+                    height = frame.get("height", layer_height)
+                    width = frame.get("width", layer_width)
+                    opacity = frame.get("opacity", 1.0) * 100.0
+                    if (width == 0):
+                        width = layer_width
+                    if (height == 0):
+                        height = layer_height
+                    new_layer = Gimp.Layer.new(image, name, width, height, Gimp.ImageType.RGBA_IMAGE, opacity, Gimp.LayerMode.NORMAL)
+
+                    if (new_layer != None):
+                        image.insert_layer(new_layer, group, position)
+
+        for layer_data in reversed(layers_json):
             layer_name = layer_data.get("name", "Layer")
             opacity = layer_data.get("opacity", 1.0) * 100.0
             visible = layer_data.get("visible", True)
             position = layer_data.get("position", [0, 0])
             frames = layer_data.get("frames", [])
 
-            print(layer_name)
             if not frames:
                 continue
 
@@ -169,7 +191,7 @@ def import_oca(input_path):
         if image.get_layers():
             image.set_selected_layers([image.get_layers()[0]])
 
-        print(f"Done! Imported {len(oca_layers)} layers from {input_path}")
+        print(f"Done! Imported {len(layers_json)} layers from {input_path}")
         return image
 
 
