@@ -91,18 +91,31 @@ def build_content_json(image, temp_dir):
         "layers": oca_layers
     }
 
-def create_layer(image, layers_json, folder_path):
-
+def create_layer(image, layers_json, folder_path, framerate, group):
+    if(group != None):
+        isgrouplayer = True
+    else:
+        isgrouplayer = False
     # Note: image.set_name() not available in GIMP 3.2, name handled via filename
     for layer in reversed(layers_json):
-        group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
-        position = len (image.get_layers())
-        image.insert_layer(group, None, position)
+        new_group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
+        layer_position = len (image.get_layers())
+        image.insert_layer(new_group, group, layer_position)
+        if not (isgrouplayer):
+            group = new_group
         if (layer.get("type") == 'grouplayer'):
-            create_layer(image, layer.get("childLayers", []), folder_path)
+            create_layer(image, layer.get("childLayers", []), folder_path, framerate, group)
         frames = layer.get("frames", [])
         if (frames != None):
+            frame_position = 0
             for frame in frames:
+                frame_position += 1
+                frame_opacity = frame.get("opacity", 1)*100
+                frame_duration = frame.get("duration", 1)
+                frame_name = frame.get("name")
+
+                frame_duration = str(round(frame_duration * (1000/framerate), 3))
+
                 frame_filename = frame.get("fileName", '')
                 if(frame_filename != ''):
                     frame_filename = frame_filename.replace('/', '\\')
@@ -116,27 +129,34 @@ def create_layer(image, layers_json, folder_path):
                 frame_file = Gio.file_new_for_path(frame_filepath)
                 frame_layer = Gimp.file_load_layer(Gimp.RunMode.NONINTERACTIVE, image, frame_file)
 
+
                 if(frame_layer != None):
-                    image.insert_layer(frame_layer, group, position)
+                    frame_layer.set_name(frame_name +" (" + frame_duration +"ms)")
+                    image.insert_layer(frame_layer, group, frame_position)
+        if not (isgrouplayer):
+            group = None
+    if(isgrouplayer):
+        isgrouplayer = False
 
 
 def import_oca(input_path):
     with tempfile.TemporaryDirectory() as temp_dir:
 
         with open(input_path, "r") as file:
-            data = json.load(file)
+            image_json = json.load(file)
 
             folder_path = os.path.split(input_path)
             folder_path = folder_path[0]
 
-            w = data.get("width", 1920)
-            h = data.get("height", 1080)
-            name = data.get("name", "Imported OCA")
-            layers_json = data.get("layers", [])
+            w = image_json.get("width", 1920)
+            h = image_json.get("height", 1080)
+            name = image_json.get("name", "Imported OCA")
+            framerate = image_json.get("frameRate", 24)
+            layers_json = image_json.get("layers", [])
 
             image = Gimp.Image.new(w, h, 0)
 
-            create_layer(image, layers_json, folder_path)
+            create_layer(image, layers_json, folder_path, framerate,None)
 
             """
             new_layer = Gimp.Layer.new_from_drawable(loaded_layer, image)
