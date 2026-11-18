@@ -91,20 +91,15 @@ def build_content_json(image, temp_dir):
         "layers": oca_layers
     }
 
-def create_layer(image, layers_json, folder_path, framerate, group):
-    if(group != None):
-        isgrouplayer = True
-    else:
-        isgrouplayer = False
+def create_layer(image, layers_json, folder_path, framerate):
+
     # Note: image.set_name() not available in GIMP 3.2, name handled via filename
     for layer in reversed(layers_json):
-        new_group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
-        layer_position = len (image.get_layers())
-        image.insert_layer(new_group, group, layer_position)
-        if not (isgrouplayer):
-            group = new_group
+        group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
+        position = len (image.get_layers())
+        image.insert_layer(group, None, position)
         if (layer.get("type") == 'grouplayer'):
-            create_layer(image, layer.get("childLayers", []), folder_path, framerate, group)
+            create_layer(image, layer.get("childLayers", []), folder_path, framerate)
         frames = layer.get("frames", [])
         if (frames != None):
             frame_position = 0
@@ -129,14 +124,9 @@ def create_layer(image, layers_json, folder_path, framerate, group):
                 frame_file = Gio.file_new_for_path(frame_filepath)
                 frame_layer = Gimp.file_load_layer(Gimp.RunMode.NONINTERACTIVE, image, frame_file)
 
-
                 if(frame_layer != None):
                     frame_layer.set_name(frame_name +" (" + frame_duration +"ms)")
                     image.insert_layer(frame_layer, group, frame_position)
-        if not (isgrouplayer):
-            group = None
-    if(isgrouplayer):
-        isgrouplayer = False
 
 
 def import_oca(input_path):
@@ -156,7 +146,7 @@ def import_oca(input_path):
 
             image = Gimp.Image.new(w, h, 0)
 
-            create_layer(image, layers_json, folder_path, framerate,None)
+            create_layer(image, layers_json, folder_path, framerate)
 
             """
             new_layer = Gimp.Layer.new_from_drawable(loaded_layer, image)
