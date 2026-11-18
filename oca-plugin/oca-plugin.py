@@ -91,17 +91,34 @@ def build_content_json(image, temp_dir):
         "layers": oca_layers
     }
 
-def create_layer(image, layers_json):
-    for layer in layers_json:
+def create_layer(image, layers_json, folder_path):
+
+    # Note: image.set_name() not available in GIMP 3.2, name handled via filename
+    for layer in reversed(layers_json):
         group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
         position = len (image.get_layers())
         image.insert_layer(group, None, position)
-        for frame in layer.get("frames", []):
-            name = frame.get("name", 'Imported Frame')
-            height = frame.get("height",layer.get("height"))
-            width = frame.get("width", layer.width)
-            opacity = frame.get("opacity", 100.0)
-            image.Layer.new(name, )
+        if (layer.get("type") == 'grouplayer'):
+            create_layer(image, layer.get("childLayers", []), folder_path)
+        frames = layer.get("frames", [])
+        if (frames != None):
+            for frame in frames:
+                frame_filename = frame.get("fileName", '')
+                if(frame_filename != ''):
+                    frame_filename = frame_filename.replace('/', '\\')
+
+                frame_filepath = os.path.join(folder_path, frame_filename)
+                print (frame_filepath)
+                if not os.path.exists(frame_filepath):
+                    print(f"Warning: frame image not found: {frame_filepath}")
+                    continue
+
+                frame_file = Gio.file_new_for_path(frame_filepath)
+                frame_layer = Gimp.file_load_layer(Gimp.RunMode.NONINTERACTIVE, image, frame_file)
+
+                if(frame_layer != None):
+                    image.insert_layer(frame_layer, group, position)
+
 
 def import_oca(input_path):
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -109,90 +126,19 @@ def import_oca(input_path):
         with open(input_path, "r") as file:
             data = json.load(file)
 
-        folder_path = os.path.split(input_path)
-        folder_path = folder_path[0]
+            folder_path = os.path.split(input_path)
+            folder_path = folder_path[0]
 
-        w = data.get("width", 1920)
-        h = data.get("height", 1080)
-        name = data.get("name", "Imported OCA")
-        layers_json = data.get("layers", [])
+            w = data.get("width", 1920)
+            h = data.get("height", 1080)
+            name = data.get("name", "Imported OCA")
+            layers_json = data.get("layers", [])
 
-        image = Gimp.Image.new(w, h, 0)
-        # Note: image.set_name() not available in GIMP 3.2, name handled via filename
-        for layer in layers_json:
-            group = Gimp.GroupLayer.new(image, layer.get("name",'Imported Layer'))
-            position = len (image.get_layers())
-            image.insert_layer(group, None, position)
-            frames = layer.get("frames", [])
-            layer_height = layer.get("height", h)
-            layer_width = layer.get("width", w)
+            image = Gimp.Image.new(w, h, 0)
 
-            if (frames != None):
-                for frame in frames:
-                    name = frame.get("name", 'Imported Frame')
-                    height = frame.get("height", layer_height)
-                    width = frame.get("width", layer_width)
-                    opacity = frame.get("opacity", 1.0) * 100.0
-                    if (width == 0):
-                        width = layer_width
-                    if (height == 0):
-                        height = layer_height
-                    new_layer = Gimp.Layer.new(image, name, width, height, Gimp.ImageType.RGBA_IMAGE, opacity, Gimp.LayerMode.NORMAL)
+            create_layer(image, layers_json, folder_path)
 
-                    frame_filename = frame.get("fileName", '')
-                    if(frame_filename != ''):
-                        index = frame_filename.index('/')
-                        frame_filename = frame_filename[:index] + "\\" + frame_filename[index + 1:]
-
-                    frame_filepath = os.path.join(folder_path, frame_filename)
-
-                    if not os.path.exists(frame_filepath):
-                         print(f"Warning: frame image not found: {frame_filepath}")
-                         continue
-
-                    frame_file = Gio.file_new_for_path(frame_filepath)
-                    frame_layer = Gimp.file_load_layer(Gimp.RunMode.NONINTERACTIVE, image, frame_file)
-
-                    if(frame_layer != None):
-                        image.insert_layer(frame_layer, group, position)
-
-
-        for layer_data in reversed(layers_json):
-            layer_name = layer_data.get("name", "Layer")
-            opacity = layer_data.get("opacity", 1.0) * 100.0
-            visible = layer_data.get("visible", True)
-            position = layer_data.get("position", [0, 0])
-            frames = layer_data.get("frames", [])
-
-            if not frames:
-                continue
-
-            frame_filename = frames[0].get("name", "")
-            frame_path = os.path.join(temp_dir, frame_filename)
-
-            if not os.path.exists(frame_path):
-                print(f"Warning: frame image not found: {frame_path}")
-                continue
-
-            frame_file = Gio.File.new_for_path(frame_path)
-            loaded_image = Gimp.file_load(
-                Gimp.RunMode.NONINTERACTIVE,
-                frame_file
-            )
-
-            if loaded_image is None:
-                print(f"Warning: could not load {frame_path}")
-                continue
-
-            # Use the first layer from the loaded image rather than flattening it,
-            # to preserve any alpha channel / transparent pixels in the PNG.
-            loaded_layers = loaded_image.get_layers()
-            if not loaded_layers:
-                print(f"Warning: no layers found in {frame_path}")
-                loaded_image.delete()
-                continue
-            loaded_layer = loaded_layers[0]
-
+            """
             new_layer = Gimp.Layer.new_from_drawable(loaded_layer, image)
             new_layer.set_name(layer_name)
             new_layer.set_opacity(opacity)
@@ -208,6 +154,7 @@ def import_oca(input_path):
             image.set_selected_layers([image.get_layers()[0]])
 
         print(f"Done! Imported {len(layers_json)} layers from {input_path}")
+        """
         return image
 
 
